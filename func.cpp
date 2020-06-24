@@ -19,6 +19,7 @@ vector<Warehouse *> MakeArray(const string &TypeOfFile) {//ввод с клав�
                 Sh->WriteToMemory();
                 arr.push_back(Sh);
             } else {
+                cin.ignore();
                 throw std::exception();
             }
         }
@@ -57,7 +58,7 @@ void MarkTypeOfFile(const string &name, const string &type) { //помечаем
     list.close();
 }
 
-string CheckTypeOfFile(const string &name) { //проверяем, существует ли файл name
+string CheckTypeOfFile(const string &Path, const string &name) { //проверяем, существует ли файл name
     bool flag = false;                       //находим тип файла (поясняет, элементы каких классов
     string TypeOfFile;                       //должны храниться в файле)
     int count = 0;
@@ -70,10 +71,10 @@ string CheckTypeOfFile(const string &name) { //проверяем, сущест�
     list.close();
     for (int i = 0; i < count; ++i) {
         string temp = Line[i];
-        temp.erase(temp.find(";"), temp.size());
+        temp.erase(temp.find(';'), temp.size());
         if (temp == name) {
             TypeOfFile = Line[i];
-            TypeOfFile.erase(0, TypeOfFile.find(";") + 1);
+            TypeOfFile.erase(0, TypeOfFile.find(';') + 1);
             cout << "Type Of File = " << TypeOfFile << endl;
             i = count;
             flag = true;
@@ -146,25 +147,17 @@ void SaveArrayToFile(const vector<Warehouse *> &arr, const string &name) { //с�
         j->Save(name);
 }
 
-void ShowList() { //вывод списка существующих бд на экран (из List.csv)
-    int count = 0;
-    char Line[100][100];
-    fstream list;
-    list.open("List.csv");
-    try {
-        if (!list.is_open()) {
-            throw std::exception();
-        } else {
-            while (list.getline(Line[count], 100)) count++;
-        }
-        for (int i = 0; i < count; ++i) {
-            cout << Line[i] << endl;
-        }
-    }
-    catch (...) {
-        cout << "Error opening the file List.csv.\n";
-    }
-    list.close();
+void ShowList(const string &Path) { //вывод списка существующих бд на экран (из List.csv)
+    fs::recursive_directory_iterator begin(Path);
+    fs::recursive_directory_iterator end;
+
+    //получаем список файлов .csv с помощью алгоритма copy_if
+    vector<fs::path> txtFiles;
+    std::copy_if(begin, end, std::back_inserter(txtFiles), [](const fs::path &path) {
+        return fs::is_regular_file(path) && (path.extension() == ".csv");
+    });
+    //выводим список файлов
+    std::copy(txtFiles.begin(), txtFiles.end(), std::ostream_iterator<fs::path>(std::cout, "\n"));
 }
 
 vector<Warehouse *> OpenFileToGetArray(const string &name) { //считываем массив из файла
@@ -183,9 +176,8 @@ vector<Warehouse *> OpenFileToGetArray(const string &name) { //считывае�
     for (int i = 0; i < count;) {
         string temp = Line[i];
         string Title = temp;
-        Title.erase(Title.begin() + Title.find(";"), Title.end());
-        Title += ";";                                                       //Title, Town, volumeStr
-                                                                            //используются только для формирования
+        Title.erase(Title.begin() + Title.find(";"), Title.end());  //Title, Town, volumeStr
+        Title += ";";                                                       //используются только для формирования
         temp.erase(temp.begin(), temp.begin() + temp.find(";") + 1); //первых;трех;параметров; для одного склада
         string Town = temp;
         Town.erase(Town.begin() + Town.find(';'), Town.end());
@@ -196,8 +188,6 @@ vector<Warehouse *> OpenFileToGetArray(const string &name) { //считывае�
         volumeStr.erase(volumeStr.begin() + volumeStr.find(';'), volumeStr.end());
         volumeStr += ";";
         temp.erase(temp.begin(), temp.begin() + temp.find(';') + 1);
-        //const char *volumeChar = volumeStr.c_str();
-        //int Volume = std::atoi(volumeChar);
 
         string FirstThreeParam = Title + Town;
         FirstThreeParam += volumeStr;
@@ -233,8 +223,8 @@ void DeleteArray(vector<Warehouse *> &arr) { //чистим память
         delete i;
 }
 
-void DeleteWarehouseInFile(const string &name) { //флаг нужен для проверки, что в файле есть TitleToDelete
-    bool flag = false;
+void DeleteWarehouseInFile(const string &Path, const string &name) {
+    bool flag = false; //флаг нужен для проверки, что в файле есть TitleToDelete
     string TitleToDelete;
     cout << "Enter Title to delete : ";
     cin >> TitleToDelete;
@@ -246,7 +236,7 @@ void DeleteWarehouseInFile(const string &name) { //флаг нужен для п
         }
     }
     if (!flag) throw std::invalid_argument("This Warehouse not found.");
-    RenameFile(name, name, Arr);
+    RewriteArrayToFile(Path, name, Arr);
     cin.ignore();
 }
 
@@ -266,29 +256,21 @@ void DeleteFile(const string &name) { //удаляем файл name
     }
 }
 
-void RenameFile(const string &OldName, const string &NewName,
-                const vector<Warehouse *> &Arr) { //Удаляем OldName, создаем NewName, записываем Arr
-    string OldFilename = OldName + ".csv";
-    const char *ChOldFilename = OldFilename.c_str(); // chFilename = (char*) filename.csv
-    try {
-        if (remove(ChOldFilename) != 0) {
-            throw std::exception();
-        } else {
-            cout << "The file " << OldFilename << " was deleted successfully.\n";
-            Create(NewName);
-            SaveArrayToFile(Arr, NewName);
-            string TypeOfFile = CheckTypeOfFile(OldName);
-            ChangeNoteInList(OldName, NewName);
-        }
+void RewriteArrayToFile(const string &Path, const string &Name, const vector<Warehouse *> &Arr) {
+    string OldFilename = Name + ".csv";     //открываем файл для очищения, записываем Arr
+    fstream file;
+    file.open(OldFilename, std::ios::out);
+    if (file.is_open()) {
+        SaveArrayToFile(Arr, Name);
+    } else {
+        throw std::invalid_argument("File does not exist.");
     }
-    catch (...) {
-        cout << "Error while deleting the file " << OldFilename << ".\n";
-    }
+    file.close();
 }
 
-vector<Warehouse *> Edit(vector<Warehouse *> &Arr, const string &ToDo) { //камень на распутье
-    string TitleToEdit;                                                  //как именно изменить
-    cout << "Enter Warehouse to edit : ";                                //содержимое склада TitleToEdit
+void Edit(vector<Warehouse *> &Arr, const string &ToDo) { //распределяет, как именно изменить
+    string TitleToEdit;                                   //содержимое склада TitleToEdit
+    cout << "Enter Warehouse to edit : ";
     cin >> TitleToEdit;
     int i = 0;
     for (; Arr[i]->GetTitle() != TitleToEdit && i < Arr.size(); ++i) {
@@ -303,7 +285,6 @@ vector<Warehouse *> Edit(vector<Warehouse *> &Arr, const string &ToDo) { //ка�
         else if (ToDo == "edit")
             Arr[i]->Edit();
     }
-    return Arr;
 }
 
 int Count(const vector<Warehouse *> &Arr, const string &WarehouseName) { //подсчет кол-ва товаров на складе
@@ -365,26 +346,32 @@ vector<Warehouse *> SampleTown(vector<Warehouse *> &Arr, const string &Town) { /
     return NewArr;
 }
 
-void ContactWithUser(bool &GoOn) {
+string MakePathToFile(const string &Path, const string &Name) {
+    return Path + Name;
+}
+
+void ContactWithUser(bool &GoOn, const string &Path) {
     string s;
     cout << "> ";
-    //cin.clear();
     getline(std::cin, s);
 
     if (s.find("create clothes ") != string::npos) { //создание БД для одежды
-        string title(s, s.find('s') + 2, s.size() - s.find('s') - 1);
-        Create(title);
-        MarkTypeOfFile(title, "clothes");
+        string name(s, s.find('s') + 2, s.size() - s.find('s') - 1);
+        string PathToFile = MakePathToFile(Path, name);
+        Create(PathToFile);
+        MarkTypeOfFile(PathToFile, "clothes");
     } else if (s.find("create shoes ") != string::npos) { //создание БД для обуви
-        string title(s, s.find("s ") + 2, s.size() - s.find("s ") - 1);
-        Create(title);
-        MarkTypeOfFile(title, "shoes");
+        string name(s, s.find("s ") + 2, s.size() - s.find("s ") - 1);
+        string PathToFile = MakePathToFile(Path, name);
+        Create(PathToFile);
+        MarkTypeOfFile(PathToFile, "shoes");
     } else if (s.find("create ") != string::npos) { //создание гибридной БД
-        string title(s, s.find(' ') + 1, s.size() - s.find(' '));
-        Create(title);
-        MarkTypeOfFile(title, "hybrid");
+        string name(s, s.find(' ') + 1, s.size() - s.find(' '));
+        string PathToFile = MakePathToFile(Path, name);
+        Create(PathToFile);
+        MarkTypeOfFile(PathToFile, "hybrid");
     } else if (s.find("show databases") != string::npos) { //вывести список БД
-        ShowList();
+        ShowList(Path);
     } else if (s.find("write") != string::npos) { //запись массива в память и вывод
         vector<Warehouse *> arr = MakeArray("hybrid"); //массив в файл не сохраняется
         ShowArray(arr);
@@ -392,10 +379,11 @@ void ContactWithUser(bool &GoOn) {
         cin.ignore();
     } else if (s.find("save ") != string::npos) { //Добавление в файл склада, введенного с клавиатуры
         string name(s, s.find(' ') + 1, s.size() - s.find(' '));
+        string PathToFile = MakePathToFile(Path, name);
         try {
-            string TypeOfFile = CheckTypeOfFile(name);
+            string TypeOfFile = CheckTypeOfFile(Path, PathToFile);
             vector<Warehouse *> arr = MakeArray(TypeOfFile);
-            SaveArrayToFile(arr, name);
+            SaveArrayToFile(arr, PathToFile);
             DeleteArray(arr);
         }
         catch (const std::invalid_argument &e) {
@@ -403,8 +391,9 @@ void ContactWithUser(bool &GoOn) {
         }
     } else if (s.find("open ") != string::npos) { //Открыть, считать и вывести массив из файла
         string name(s, s.find(' ') + 1, s.size() - s.find(' '));
+        string PathToFile = MakePathToFile(Path, name);
         try {
-            vector<Warehouse *> arr = OpenFileToGetArray(name);
+            vector<Warehouse *> arr = OpenFileToGetArray(PathToFile);
             ShowArray(arr);
             DeleteArray(arr);
         }
@@ -413,35 +402,34 @@ void ContactWithUser(bool &GoOn) {
         }
     } else if (s.find("remove warehouse ") != string::npos) { //Удалить один склад из файла
         string name(s, s.find("se ") + 3, s.size() - s.find("se ") - 2);
+        string PathToFile = MakePathToFile(Path, name);
         try {
-            DeleteWarehouseInFile(name);
+            DeleteWarehouseInFile(Path, PathToFile);
         }
         catch (const std::invalid_argument &e) {
             cout << e.what() << "\n";
         }
     } else if (s.find("remove ") != string::npos) { //Удалить файл
         string name(s, s.find(' ') + 1, s.size() - s.find(' '));
-        DeleteFile(name);
+        string PathToFile = MakePathToFile(Path, name);
+        DeleteFile(PathToFile);
     } else if (s.find("rename ") != string::npos) { //переименовать файл
         string OldName(s, s.find(' ') + 1, s.size());
         string NewName(OldName, OldName.find(' ') + 1, OldName.size());
         OldName.erase(OldName.find(' '), OldName.size());
-        cout << "Old Name :" << OldName << endl;
-        cout << "New Name :" << NewName << endl;
-        try {
-            vector<Warehouse *> arr = OpenFileToGetArray(OldName);
-            RenameFile(OldName, NewName, arr);
-            DeleteArray(arr);
-        }
-        catch (const std::invalid_argument &e) {
-            cout << e.what() << "\n";
-        }
+        string PathFrom = MakePathToFile(Path, OldName);
+        string PathTo = MakePathToFile(Path, NewName);
+        cout << "Old Name :" << PathFrom << endl;
+        cout << "New Name :" << PathTo << endl;
+        fs::rename(PathFrom + ".csv", PathTo + ".csv");
+        ChangeNoteInList(PathFrom, PathTo);
     } else if (s.find("add ") != string::npos) { //добавить запись в файл
         string name(s, s.find(' ') + 1, s.size() - s.find(' '));
+        string PathToFile = MakePathToFile(Path, name);
         try {
-            vector<Warehouse *> arr = OpenFileToGetArray(name);
+            vector<Warehouse *> arr = OpenFileToGetArray(PathToFile);
             Edit(arr, "add");
-            RenameFile(name, name, arr);
+            RewriteArrayToFile(Path, PathToFile, arr);
             DeleteArray(arr);
         }
         catch (const std::invalid_argument &e) {
@@ -449,10 +437,11 @@ void ContactWithUser(bool &GoOn) {
         }
     } else if (s.find("erase ") != string::npos) { //удалить запись из файла
         string name(s, s.find(' ') + 1, s.size() - s.find(' '));
+        string PathToFile = MakePathToFile(Path, name);
         try {
-            vector<Warehouse *> arr = OpenFileToGetArray(name);
+            vector<Warehouse *> arr = OpenFileToGetArray(PathToFile);
             Edit(arr, "erase");
-            RenameFile(name, name, arr);
+            RewriteArrayToFile(Path, PathToFile, arr);
             DeleteArray(arr);
         }
         catch (const std::invalid_argument &e) {
@@ -460,10 +449,11 @@ void ContactWithUser(bool &GoOn) {
         }
     } else if (s.find("edit ") != string::npos) { //изменить запись в файле
         string name(s, s.find(' ') + 1, s.size() - s.find(' '));
+        string PathToFile = MakePathToFile(Path, name);
         try {
-            vector<Warehouse *> arr = OpenFileToGetArray(name);
+            vector<Warehouse *> arr = OpenFileToGetArray(PathToFile);
             Edit(arr, "edit");
-            RenameFile(name, name, arr);
+            RewriteArrayToFile(Path, PathToFile, arr);
             DeleteArray(arr);
         }
         catch (const std::invalid_argument &e) {
@@ -473,8 +463,9 @@ void ContactWithUser(bool &GoOn) {
         string name(s, s.find(' ') + 1, s.size());
         string WarehouseName(name, name.find(' ') + 1, name.size());
         name.erase(name.find(' '), name.size());
+        string PathToFile = MakePathToFile(Path, name);
         try {
-            vector<Warehouse *> arr = OpenFileToGetArray(name);
+            vector<Warehouse *> arr = OpenFileToGetArray(PathToFile);
             int c = Count(arr, WarehouseName);
             cout << "The product quantity in " << WarehouseName << " is " << c << ".\n";
             DeleteArray(arr);
@@ -486,8 +477,9 @@ void ContactWithUser(bool &GoOn) {
         string name(s, s.find(' ') + 1, s.size());
         string WarehouseName(name, name.find(' ') + 1, name.size());
         name.erase(name.find(' '), name.size());
+        string PathToFile = MakePathToFile(Path, name);
         try {
-            vector<Warehouse *> arr = OpenFileToGetArray(name);
+            vector<Warehouse *> arr = OpenFileToGetArray(PathToFile);
             Warehouse *Result = Find(arr, WarehouseName);
             Result->ReadFromMemory();
             DeleteArray(arr);
@@ -497,14 +489,15 @@ void ContactWithUser(bool &GoOn) {
         }
     } else if (s.find("sort title ") != string::npos) { //отсортировать БД по названию
         string name(s, s.find('e') + 2, s.size() - s.find('e') - 1);
+        string PathToFile = MakePathToFile(Path, name);
         try {
-            vector<Warehouse *> arr = OpenFileToGetArray(name);
+            vector<Warehouse *> arr = OpenFileToGetArray(PathToFile);
             SortByTitle(arr);
-            cout << "Save sorted array? (Saving to file " << name << ".csv) [y/n]\n> ";
+            cout << "Save sorted array? (Saving to file " << PathToFile << ".csv) [y/n]\n> ";
             char ans;
             cin >> ans;
             if (ans == 'y') {
-                RenameFile(name, name, arr);
+                RewriteArrayToFile(Path, PathToFile, arr);
             } else if (ans == 'n') {
                 ShowArray(arr);
             }
@@ -516,14 +509,15 @@ void ContactWithUser(bool &GoOn) {
         }
     } else if (s.find("sort volume ") != string::npos) { //отсортировать БД по увеличению объема
         string name(s, s.find('e') + 2, s.size() - s.find('e') - 1);
+        string PathToFile = MakePathToFile(Path, name);
         try {
-            vector<Warehouse *> arr = OpenFileToGetArray(name);
+            vector<Warehouse *> arr = OpenFileToGetArray(PathToFile);
             SortByVolume(arr);
             cout << "Save sorted array? (Saving to file " << name << ".csv) [y/n]\n> ";
             char ans;
             cin >> ans;
             if (ans == 'y') {
-                RenameFile(name, name, arr);
+                RewriteArrayToFile(Path, PathToFile, arr);
             } else if (ans == 'n') {
                 ShowArray(arr);
             }
@@ -536,10 +530,11 @@ void ContactWithUser(bool &GoOn) {
     } else if (s.find("piled ") != string::npos) { //создать выборку складов, заполненных менее чем на N%
         string str(s, s.find(' ') + 1, s.size() - s.find(' '));
         string name(str, 0, str.find(' '));
+        string PathToFile = MakePathToFile(Path, name);
         string n(str, str.find(' ') + 1, s.size() - s.find(' '));
         double N = std::stod(n);
         try {
-            vector<Warehouse *> arr = OpenFileToGetArray(name);
+            vector<Warehouse *> arr = OpenFileToGetArray(PathToFile);
             vector<Warehouse *> NewArray = SamplePercents(arr, N);
             cout << "Save new array? [y/n]\n> ";
             char ans;
@@ -548,10 +543,11 @@ void ContactWithUser(bool &GoOn) {
                 cout << "Enter name of the new file : ";
                 string NewName;
                 cin >> NewName;
-                Create(NewName);
-                string TypeOfFile = CheckTypeOfFile(name);
-                MarkTypeOfFile(NewName, TypeOfFile);
-                SaveArrayToFile(NewArray, NewName);
+                string PathToNewFile = MakePathToFile(Path, NewName);
+                Create(PathToNewFile);
+                string TypeOfFile = CheckTypeOfFile(Path, PathToFile);
+                MarkTypeOfFile(PathToNewFile, TypeOfFile);
+                SaveArrayToFile(NewArray, PathToNewFile);
             } else if (ans == 'n') {
                 ShowArray(NewArray);
             }
@@ -565,8 +561,9 @@ void ContactWithUser(bool &GoOn) {
         string str(s, s.find("n ") + 2, s.size() - s.find("n ") - 1);
         string town(str, 0, str.find(' '));
         string name(str, str.find(' ') + 1, s.size() - s.find(' '));
+        string PathToFile = MakePathToFile(Path, name);
         try {
-            vector<Warehouse *> arr = OpenFileToGetArray(name);
+            vector<Warehouse *> arr = OpenFileToGetArray(PathToFile);
             vector<Warehouse *> NewArray = SampleTown(arr, town);
             cout << "Save new array? [y/n]\n> ";
             char ans;
@@ -575,10 +572,11 @@ void ContactWithUser(bool &GoOn) {
                 cout << "Enter name of the new file : ";
                 string NewName;
                 cin >> NewName;
-                Create(NewName);
-                string TypeOfFile = CheckTypeOfFile(name);
-                MarkTypeOfFile(NewName, TypeOfFile);
-                SaveArrayToFile(NewArray, NewName);
+                string PathToNewFile = MakePathToFile(Path, NewName);
+                Create(PathToNewFile);
+                string TypeOfFile = CheckTypeOfFile(Path, PathToFile);
+                MarkTypeOfFile(PathToNewFile, TypeOfFile);
+                SaveArrayToFile(NewArray, PathToNewFile);
             } else if (ans == 'n') {
                 ShowArray(NewArray);
             }

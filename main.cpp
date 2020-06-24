@@ -24,10 +24,12 @@ int main() {
     cout << "To find warehouses located in Town enter 'located in <Town> <DB_name>'\n\n";
     cout << "To exit the program enter 'stop'\n\n";
 
+    string Path = "./Databases/";
+    fs::create_directories(Path);
     bool GoOn = true;
 
-    while(GoOn) {
-        ContactWithUser(GoOn);
+    while (GoOn) {
+        ContactWithUser(GoOn, Path);
     }
 
     return 0;

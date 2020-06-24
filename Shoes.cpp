@@ -220,7 +220,6 @@ void Shoes::Edit() {
     cin >> OldNumber;
     cout << "Enter size to edit : ";
     cin >> OldSize;
-    this->EraseNumbers(OldType, OldNumber, OldSize);
 
     //Add new data
     int Num = 0, Size = 0;

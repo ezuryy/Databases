@@ -7,6 +7,10 @@
 #include <algorithm>
 #include <map>
 #include <set>
+#include <memory>
+#include <experimental/filesystem>
+#include <iterator>
+namespace fs = std::experimental::filesystem;
 
 using std::cin;
 using std::cout;
