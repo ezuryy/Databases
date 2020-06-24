@@ -1,5 +1,6 @@
 #ifndef HW1_2_CLOTHES_H
 #define HW1_2_CLOTHES_H
+
 #include "Warehouse.h"
 
 class Clothes : public Warehouse {
@@ -11,7 +12,7 @@ public:
     Clothes();
 
     Clothes(const string &title, const string &town, const int &volume,
-                     multimap<string, multimap<int, pair<int, int>>> &list);
+            multimap<string, multimap<int, pair<int, int>>> &list);
 
     void WriteToMemory() override;
 
